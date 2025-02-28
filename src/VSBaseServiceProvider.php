@@ -3,9 +3,12 @@
 namespace VS\Base;
 
 
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Support\ServiceProvider;
+use VS\Admin\Http\Middleware\AdminAuth;
 use VS\Base\Exceptions\APIException;
 use VS\Base\Exceptions\APIExceptionHandler;
+use VS\Base\Http\Middleware\ForceJSONResponseMiddleware;
 
 class VSBaseServiceProvider extends ServiceProvider
 {
@@ -14,7 +17,6 @@ class VSBaseServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(APIExceptionHandler::class, APIExceptionHandler::class);
     }
 
     /**
@@ -22,22 +24,26 @@ class VSBaseServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-//        $this->app->make(\Illuminate\Contracts\Debug\ExceptionHandler::class)->reportable(function (Throwable $e) {
-//            if ($e instanceof ModelNotFoundException) {
-//                Log::error('Model not found: ' . $e->getMessage());
-//                // Handle the specific exception, or rethrow
-//            }
-//            elseif ($e instanceof NotFoundHttpException) {
-//                Log::error('Route not found: ' . $e->getMessage());
-//                // Handle the NotFoundHttpException or rethrow
-//            } else {
-//                // Log other general exceptions or handle them differently
-//                Log::error('Unhandled exception: ' . $e->getMessage());
-//            }
-//        });
+        $this->registerMiddleware();
 
+        $this->exceptionHandler();
+    }
+
+    protected function registerMiddleware()
+    {
+        $this->app['router']->aliasMiddleware('force.json', ForceJSONResponseMiddleware::class);
+    }
+
+    protected function exceptionHandler()
+    {
         $this->app->make(\Illuminate\Contracts\Debug\ExceptionHandler::class)->renderable(function (\Throwable $e, $request) {
-            if ($e instanceof APIException) {
+            if ($e instanceof AuthenticationException) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized',
+                    'errors' => 'Invalid client credentials.',
+                ], 401);
+            } elseif ($e instanceof APIException) {
                 return response()->json([
                     'status' => false,
                     'message' => 'An error occurred.',
